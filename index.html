@@ -31143,14 +31143,14 @@ void main() {
   }
   function h8(t, e, n) {
     let customMap = n.current.map || null;
-    let i = new Sx({ canvas: t, antialias: false, powerPreference: "high-performance" });
+    let i; try { i = new Sx({ canvas: t, antialias: false, powerPreference: "high-performance" }); } catch (glErr) { try { i = new Sx({ canvas: t, antialias: false }); } catch (glErr2) { document.body.insertAdjacentHTML("beforeend", '<div style="position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#080909;color:#deded8;font:16px monospace;text-align:center;padding:24px">WebGL could not start in this browser.<br>Enable hardware acceleration in your browser settings, or try Chrome/Edge/Firefox.</div>'); throw glErr2; } }
     i.setPixelRatio(1), i.outputColorSpace = Li, i.toneMapping = Lr;
     // ===== DANE motion blur: true camera-motion blur. The previous frame is
     // reprojected per-pixel through the depth buffer, so pixels smear exactly
     // along their real screen velocity. No accumulation buffer means nothing
     // lingers when the camera stops (the old afterimage pass painted stale
     // stretched frames for ~0.3s after grabs/landings and read as a freeze).
-    const daneMbSupported = i.extensions.has("EXT_color_buffer_float");
+    let daneMbSupported = i.extensions.has("EXT_color_buffer_float") && !/[?&]noblur\b/.test(location.search); let daneBlackFrames = 0, daneBlurFrames = 0;
     let daneMb = null, daneMbMats = null, daneDimNode = null, daneJoyNode = null, daneCamBaseV = new ne(), daneAxoV = new ne(), daneAxoV2 = new ne(), daneWV = new ne(), daneUeV = new ne(), daneGV1 = new ne(), daneGV2 = new ne(), daneGV3 = new ne(), daneHandSort = [null, null], daneFacesArr = [{ axis: "x", sign: -1 }, { axis: "x", sign: 1 }, { axis: "z", sign: -1 }, { axis: "z", sign: 1 }];
     function daneMbMatsInit() {
       if (daneMbMats) return;
@@ -33819,8 +33819,20 @@ void main() {
         a.updateMatrixWorld();
         if (!daneRts.prevVPInit) { daneRts.prevVP.multiplyMatrices(a.projectionMatrix, a.matrixWorldInverse); daneRts.prevVPInit = true; }
         daneRts.blurMat.uniforms.uPrevVP.value = daneRts.prevVP;
-        i.setRenderTarget(daneRts.sceneRT), i.render(r, a);
-        i.setRenderTarget(null), i.render(daneRts.presentScene, a);
+        try {
+          i.setRenderTarget(daneRts.sceneRT), i.render(r, a);
+          i.setRenderTarget(null), i.render(daneRts.presentScene, a);
+          // Desktop GPU safety net: if the blur path outputs a black frame (some
+          // drivers mishandle half-float + depth-texture targets), switch it off.
+          if (daneBlurFrames++ < 40 && daneBlurFrames > 3) {
+            const gl = i.getContext(), px = new Uint8Array(4); let lit = 0;
+            for (const fx of [0.2, 0.5, 0.8]) for (const fy of [0.3, 0.6, 0.85]) {
+              gl.readPixels(Math.floor(gl.drawingBufferWidth * fx), Math.floor(gl.drawingBufferHeight * fy), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+              if (px[0] + px[1] + px[2] > 2) lit++;
+            }
+            if (lit === 0 && ++daneBlackFrames >= 3) { daneMbSupported = false; console.warn("Motion blur disabled: black output"); }
+          }
+        } catch (daneBlurErr) { daneMbSupported = false; i.setRenderTarget(null); console.warn("Motion blur disabled", daneBlurErr); i.render(r, a); }
         daneRts.prevVP.multiplyMatrices(a.projectionMatrix, a.matrixWorldInverse);
       } else { if (daneMb) daneMb.prevVPInit = false; i.render(r, a); }
     }, "frame");
