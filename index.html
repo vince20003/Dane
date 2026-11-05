@@ -719,14 +719,18 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
   rotate.hidden = true;
   document.body.appendChild(rotate);
   const portrait = () => matchMedia("(orientation: portrait)").matches;
+  let fsSkipped = false;
   function syncFullscreen() {
     const active = inFullscreen();
     const rotationNeeded = active && mobile && portrait();
     const root = document.getElementById("root");
     const started = !!(root && root.querySelector('.shell[data-game-started="true"]'));
-    gate.hidden = active || !started;
+    // Fullscreen is only enforced on phones/tablets. On desktop browsers the
+    // game must always be playable (fullscreen can be blocked in embedded frames).
+    const needFs = mobile && !fsSkipped;
+    gate.hidden = !needFs || active || !started;
     rotate.hidden = !rotationNeeded;
-    if (root) root.inert = (!active && started) || rotationNeeded;
+    if (root) root.inert = (needFs && !active && started) || rotationNeeded;
     if (active) status.textContent = "";
   }
   async function lockLandscape() {
@@ -745,7 +749,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
     const element = document.documentElement;
     const request = element.requestFullscreen || element.webkitRequestFullscreen;
     if (!request) {
-      status.textContent = "Fullscreen is not supported by this browser. Try another browser.";
+      fsSkipped = true; status.textContent = ""; syncFullscreen();
       return;
     }
     try {
@@ -754,7 +758,7 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
       if (inFullscreen()) await lockLandscape();
       else status.textContent = "Fullscreen did not start. Try again or check your browser settings.";
     } catch (_) {
-      status.textContent = "Fullscreen was blocked. Try again or check your browser settings.";
+      fsSkipped = true; status.textContent = "";
       syncFullscreen();
     }
   });
